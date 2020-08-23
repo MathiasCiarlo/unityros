@@ -69,7 +69,8 @@ public class BallPoseSubscriber : MonoBehaviour
   
   // These two are important
   public new static string GetMessageTopic() {
-    //topic name is up to the user
+    //Topic name is up to the user. It should return the full path to the topic. 
+    //For eg, "/turtle1/cmd_vel" instead of "/cmd_vel".
     return "/pose_info";
   }
 
@@ -132,7 +133,7 @@ public class BallTwistPublisher : MonoBehaviour
   }    
 }
 ```
-Above script defines the publisher. Inorder to call this publisher attach one script,  **DataManager.cs**, to the gameobject ball.
+Above script defines the publisher. In order to call this publisher attach one script,  **DataManager.cs**, to the gameobject ball.
 ```cs
 using System.Collections;
 using System.Collections.Generic;
