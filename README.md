@@ -11,11 +11,20 @@ Documentation is in the code. I added some more in addition to what Michael Jenk
 author) did. The main file is ROSBridgeWebSocketConnection.cs, which sets up everything.
 
 ## Example usage
-This is an example application where a ball is controlled. Basically, there are three important script types to notice. First, create a main script responsible for initializing RosBridge:
+This is an example application where a ball is controlled. Basically, there are three important script types to notice. 
+
+### **Setup the connection**
+First, create a main script, **ROSInitializer.cs** responsible for initializing RosBridge. Attach this to a GameObject, say Main Camera:
 
 ``` cs
-public class RollABallRosController : MonoBehaviour {
-  private ROSBridgeWebSocketConnection ros = null;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using ROSBridgeLib;
+
+public class ROSInitializer : MonoBehaviour
+{
+   public ROSBridgeWebSocketConnection ros = null;
     
   void Start() {
     // Where the rosbridge instance is running, could be localhost, or some external IP
@@ -23,7 +32,7 @@ public class RollABallRosController : MonoBehaviour {
 
     // Add subscribers and publishers (if any)
     ros.AddSubscriber (typeof(BallPoseSubscriber));
-    ros.AddPublisher (typeof(BallControlPublisher));
+    ros.AddPublisher (typeof(BallTwistPublisher));
 
     // Fire up the subscriber(s) and publisher(s)
     ros.Connect ();
@@ -40,21 +49,33 @@ public class RollABallRosController : MonoBehaviour {
     ros.Render ();
   }
 }
+
 ```
-
-Then, create a subscriber script which will receive updates from a chosen ROS topic
+### **Subscriber**
+Then, create a subscriber script, **BallPoseSubscriber.cs**, which will receive updates from a chosen ROS topic
 ``` cs
-// Ball subscriber:
-public class BallPoseSubscriber : ROSBridgeSubscriber {
-  static GameObject ball;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
 
+using ROSBridgeLib;
+using SimpleJSON;
+using ROSBridgeLib.geometry_msgs;
+
+
+public class BallPoseSubscriber : MonoBehaviour
+{
+  static GameObject ball;
+  
   // These two are important
   public new static string GetMessageTopic() {
-    return "/path/to/pose/topic";
+    //topic name is up to the user
+    return "/pose_info";
   }
 
   public new static string GetMessageType() {
-    return "std_msgs/PoseMsg";
+    //Same as the definition present in ROS documentation:
+    return "geometry_msgs/Pose";
   }
 
   // Important function (I think.. Converts json to PoseMsg)
@@ -63,27 +84,43 @@ public class BallPoseSubscriber : ROSBridgeSubscriber {
   }
 
   // This function should fire on each received ros message
-  public new static void CallBack(ROSBridgeMsg msg) {
-
+  public new static void CallBack(PoseMsg msg) {
+    
+    Debug.Log("Recieved Message : "+msg.ToYAMLString());
     // Update ball position, or whatever
-    ball.x = msg.x; // Check msg definition in rosbridgelib
-    ball.y = msg.y;
-    ball.z = msg.z;
+    ball=GameObject.Find("ball");
+    Vector3 ballPos=ball.transform.position;
+    ballPos.x = msg.GetPosition().GetX();
+    ballPos.y = msg.GetPosition().GetY();
+    ballPos.z = msg.GetPosition().GetZ();
+    //Changing ball's position to the updated position vector
+    ball.transform.position=ballPos;
   }
 }
 ```
-If you need to publish data to ROS, create a publisher:
+Verify the subscriber by running:
+```console
+foo@bar:~$ rostopic pub -1 /pose_info geometry_msgs/Pose -- '[1.0,1.0,1.0]' '[1.0,1.0,1.0,1.0]' 
+```
+### **Publisher**
+If you need to publish data to ROS, create a publisher like **BallTwistPublisher.cs**:
 ``` cs
-// Ball publisher: // Using twist msgs for example?
-public class BallControlPublisher: ROSBridgePublisher {
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using SimpleJSON;
+using ROSBridgeLib.geometry_msgs;
 
-  // The following three functions are important
+public class BallTwistPublisher : MonoBehaviour
+{
+    // The following three functions are important
   public static string GetMessageTopic() {
-    return "/topic/to/publish/to";
+    //topic name is up to the user
+    return "/twist_info";
   }
 
   public static string GetMessageType() {
-      return "std_msgs/TwistMsg";
+      return "geometry_msgs/Twist";
   }
 
   public static string ToYAMLString(TwistMsg msg) {
@@ -94,13 +131,57 @@ public class BallControlPublisher: ROSBridgePublisher {
     return new TwistMsg(msg);
   }    
 }
-
-// And in some other class where the ball is controlled:
-TwistMsg msg = new TwistMsg(x, y, z); // Circa
-
-// Publish it (ros is the object defined in the first class)
-ros.Publish(BallControlPublisher.GetMessageTopic(), msg);
 ```
+Above script defines the publisher. Inorder to call this publisher attach one script,  **DataManager.cs**, to the gameobject ball.
+```cs
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
 
+using ROSBridgeLib;
+using ROSBridgeLib.geometry_msgs;
+
+public class DataManager : MonoBehaviour
+{
+    Rigidbody rb;
+    GameObject rosObj;
+    //Required for TwistMsg
+    Vector3Msg linearVel;
+    Vector3Msg angularVel;
+    TwistMsg msg;
+    
+    // Start is called before the first frame update
+    void Start()
+    {
+      //Since we attached ROSInitiazer to Main Camera:
+        rosObj = GameObject.Find ("Main Camera");
+        rb=GetComponent<Rigidbody>();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+      //dependant on the message defintion:
+        linearVel=new Vector3Msg(
+            rb.velocity.x,
+            rb.velocity.y,
+            rb.velocity.z
+        );
+        angularVel=new Vector3Msg(
+            rb.angularVelocity.x,
+            rb.angularVelocity.y,
+            rb.angularVelocity.z
+        );
+        msg=new TwistMsg(linearVel,angularVel);
+        rosobj.GetComponent<ROSInitialize>().ros.Publish(
+            BallTwistPublisher.GetMessageTopic(),msg
+        );
+    }
+}
+```
+verify the publisher script:
+```console
+foo@bar:~$ rostopic echo /twist_info
+```
 ## License
 Note: SimpleJSON is included here as a convenience. It has its own licensing requirements. See source code and unity store for details.
