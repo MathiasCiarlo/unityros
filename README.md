@@ -59,7 +59,6 @@ public class ROSInitializer : MonoBehaviour
     ros.Render ();
   }
 }
-
 ```
 ### **Subscriber**
 Then, create a subscriber script, **BallPoseSubscriber.cs**, which will receive updates from a chosen ROS topic
@@ -95,15 +94,16 @@ public class BallPoseSubscriber : ROSBridgeSubscriber
   }
 
   // This function should fire on each received ros message
-  public new static void CallBack(PoseMsg msg) {
+  public new static void CallBack(ROSBridgeMsg msg) {
     
     Debug.Log("Recieved Message : "+msg.ToYAMLString());
     // Update ball position, or whatever
+    PoseMsg PoseData=(PoseMsg)msg;
     ball=GameObject.Find("ball");
     Vector3 ballPos=ball.transform.position;
-    ballPos.x = msg.GetPosition().GetX();
-    ballPos.y = msg.GetPosition().GetY();
-    ballPos.z = msg.GetPosition().GetZ();
+    ballPos.x = PoseData.GetPosition().GetX();
+    ballPos.y = PoseData.GetPosition().GetY();
+    ballPos.z = PoseData.GetPosition().GetZ();
     //Changing ball's position to the updated position vector
     ball.transform.position=ballPos;
   }
@@ -120,6 +120,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
+using ROSBridgeLib;
 using ROSBridgeLib.geometry_msgs;
 
 public class BallTwistPublisher : ROSBridgePublisher
@@ -143,7 +144,7 @@ public class BallTwistPublisher : ROSBridgePublisher
   }    
 }
 ```
-Above script defines the publisher. In order to call this publisher attach one script,  **DataManager.cs**, to the gameobject ball.
+Above script defines the publisher. In order to call this publisher attach one script,  **DataController.cs**, to the gameobject ball.
 ```cs
 using System.Collections;
 using System.Collections.Generic;
@@ -152,7 +153,7 @@ using UnityEngine;
 using ROSBridgeLib;
 using ROSBridgeLib.geometry_msgs;
 
-public class DataManager : MonoBehaviour
+public class DataController : MonoBehaviour
 {
     Rigidbody rb;
     GameObject rosObj;
@@ -184,7 +185,7 @@ public class DataManager : MonoBehaviour
             rb.angularVelocity.z
         );
         msg=new TwistMsg(linearVel,angularVel);
-        rosobj.GetComponent<ROSInitialize>().ros.Publish(
+        rosObj.GetComponent<ROSInitializer>().ros.Publish(
             BallTwistPublisher.GetMessageTopic(),msg
         );
     }
